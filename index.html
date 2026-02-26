@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flexi Tutors Registration</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://js.paystack.co/v2/inline.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; background:#f7f7f7; margin:0; padding:0;}
+h2 { text-align:center; color:#333; }
+form, #page2, #page4 { max-width:500px; margin:20px auto; padding:20px; background:#fff; border-radius:10px; box-shadow:0 2px 5px rgba(0,0,0,0.2);}
+label { display:block; margin-top:10px; font-weight:bold;}
+input[type="text"], select { width:100%; padding:8px; margin-top:5px; border-radius:5px; border:1px solid #ccc; box-sizing: border-box;}
+input[readonly] { background-color: #eee; cursor: not-allowed; color: #555;}
+button { margin-top:20px; padding:12px 20px; background:#28a745; color:#fff; border:none; border-radius:5px; cursor:pointer; width: 100%; font-size: 16px; font-weight: bold;}
+button:hover { background: #218838; }
+#slotsRemaining { text-align:center; font-weight:bold; color:#d9534f; margin-top:20px;}
+.whatsapp-btn { display:block; text-align:center; font-size:16px; padding:12px; border-radius:8px; color:#fff; text-decoration:none; margin:10px 0; transition: transform 0.2s; font-weight: bold;}
+.whatsapp-btn.general { background:#25D366; }
+.whatsapp-btn.dept { background:#128C7E; }
+footer { text-align:center; margin-top:20px; font-size:12px; color:#888; }
+#paymentStatus { color:red; font-weight:bold; text-align:center; margin-top:10px; }
+#confettiCanvas { position:fixed; pointer-events:none; top:0; left:0; width:100%; height:100%; z-index:9999; }
+#qr-code-temp { display: none; }
+#subjectFields input { margin-bottom: 8px; }
+/* Add this to your <style> */
+#deptGroup {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+</style>
+</head>
+<body>
+
+<div id="qr-code-temp"></div>
+
+<div id="page1">
+  <h2>Flexi Tutors Registration</h2>
+  <p id="slotsRemaining">Loading available slots...</p>
+  <form id="registrationForm">
+    <label>Full Name:</label>
+    <input type="text" id="fullName" required placeholder="John Doe">
+
+    <label>WhatsApp Number:</label>
+    <input type="text" id="whatsappNumber" placeholder="e.g. 08012345678" required>
+
+    <label>Exam Type:</label>
+    <select id="examType" required>
+      <option value="">Select Exam</option>
+      <option value="JAMB">JAMB</option>
+      <option value="WAEC">WAEC</option>
+      <option value="NECO">NECO</option>
+    </select>
+
+    <label>Department:</label>
+    <select id="department" required>
+      <option value="">Select Department</option>
+      <option value="Science">Science</option>
+      <option value="Art">Art</option>
+      <option value="Commercial">Commercial</option>
+    </select>
+
+    <div id="subjectWrapper" style="display:none;">
+        <label>Subjects Offering:</label>
+        <div id="subjectFields"></div>
+    </div>
+
+    <button type="button" id="continuePage2">Continue to Rules</button>
+  </form>
+  <footer>Powered by FLEXI Systems</footer>
+</div>
+
+<div id="page2" style="display:none;">
+  <h2>Rules & Regulations</h2>
+  <div style="font-size: 14px; line-height: 1.6; color: #444; padding: 10px;">
+    <p>1. Complete payment to confirm registration.</p>
+    <p>2. Be punctual for classes and CBT practice.</p>
+    <p>3. No cheating during CBT exercises.</p>
+    <p>4. Respect tutors and fellow students.</p>
+    <p>5. Payment is non-refundable after confirmation.</p>
+    <p>6. Follow instructions for WhatsApp groups.</p>
+  </div>
+
+  <button id="payNow">Proceed to Payment ₦1,100</button>
+  <p id="paymentStatus"></p>
+  <footer>Powered by FLEXI Systems</footer>
+</div>
+
+<div id="page4" style="display:none;">
+  <h2>Payment Successful!</h2>
+  <p style="text-align:center;">Reference: <strong id="paymentRef"></strong></p>
+  <button id="downloadReceipt" style="background: #6f42c1;">Download Official Receipt</button>
+  <button id="copyRef" style="background: #007bff; margin-top: 10px;">Copy Reference</button>
+  
+  <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+  
+  <a id="generalGroup" href="https://chat.whatsapp.com/HoC6C1EUhYO9c45tgBtgOC?mode=gi_t" target="_blank" class="whatsapp-btn general">Join General WhatsApp Group</a>
+<a id="deptGroup" target="_blank" class="whatsapp-btn dept">Join Departmental Group</a>
+  
+  <canvas id="confettiCanvas"></canvas>
+  <footer>Powered by FLEXI Systems</footer>
+</div>
+<script>
+// --- 1. FIREBASE CONFIG ---
+const firebaseConfig = { 
+  apiKey: "AIzaSyA0XwnN841QNBqLxqZRlBvB32wsCIyntzs",
+  authDomain: "flexi-tutorials.firebaseapp.com",
+  projectId: "flexi-tutorials",
+  storageBucket: "flexi-tutorials.appspot.com",
+  messagingSenderId: "746181938497",
+  appId: "1:746181938497:web:2b0aefcb29286c6cf265c0"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Elements
+const subjectFieldsDiv = document.getElementById("subjectFields");
+const subjectWrapper = document.getElementById("subjectWrapper");
+
+// Live slots
+db.collection("registrations").onSnapshot(snapshot=>{
+  const slotsLeft = 100 - snapshot.size;
+  document.getElementById("slotsRemaining").textContent = slotsLeft <= 0 ? "All slots filled!" : `Slots Remaining: ${slotsLeft} / 100`;
+});
+
+// --- 2. SUBJECT LOGIC ---
+document.getElementById("examType").addEventListener("change", function(){
+  const exam = this.value; 
+  subjectFieldsDiv.innerHTML = "";
+  if(!exam) { subjectWrapper.style.display = "none"; return; }
+  
+  subjectWrapper.style.display = "block";
+  if(exam === "JAMB"){
+    const eng = document.createElement("input");
+    eng.type = "text"; eng.value = "Use of English"; eng.readOnly = true;
+    subjectFieldsDiv.appendChild(eng);
+    for(let i=1; i<=3; i++){
+        const sub = document.createElement("input");
+        sub.type = "text"; sub.placeholder = `Subject ${i+1}`; sub.required = true;
+        subjectFieldsDiv.appendChild(sub);
+    }
+  } else {
+    for(let i=1; i<=9; i++){
+        const sub = document.createElement("input");
+        sub.type = "text"; sub.placeholder = `Subject ${i}`; sub.required = true;
+        subjectFieldsDiv.appendChild(sub);
+    }
+  }
+});
+
+// Navigation
+document.getElementById("continuePage2").addEventListener("click", () => {
+  if(!document.getElementById("registrationForm").checkValidity()) { alert("Please fill all fields!"); return; }
+  document.getElementById("page1").style.display = "none";
+  document.getElementById("page2").style.display = "block";
+});
+
+// --- 3. PAYSTACK & REDIRECTION LOGIC ---
+document.getElementById("payNow").addEventListener("click", () => {
+  const paystack = new PaystackPop(); // V2 Initializer
+  
+  paystack.newTransaction({
+    key: 'pk_test_9408761e58ce1fe7a3a57c0df2422d887c3d4b35',
+    email: 'student@flexitutors.com', 
+    amount: 110000, 
+    currency: "NGN",
+    reference: 'FT-' + Math.floor(Math.random()*1e9), // 'ref' becomes 'reference'
+    
+    onSuccess: async function(response){ // 'callback' becomes 'onSuccess'
+      // 1. Save Department to LocalStorage immediately
+      const dept = document.getElementById("department").value;
+ localStorage.setItem("flexiPayment", JSON.stringify({
+  reference: response.reference,
+  name: document.getElementById("fullName").value,
+  whatsapp: document.getElementById("whatsappNumber").value,
+  department: dept,
+  paid: true,
+  time: Date.now()
+}));
+      localStorage.setItem("deptGroup", dept);
+
+      // 2. UI Transitions
+      document.getElementById("page2").style.display = "none";
+      document.getElementById("page4").style.display = "block";
+      document.getElementById("paymentRef").textContent = response.reference;
+
+      // 3. Update the Department Button
+      updateDeptButton();
+
+      // 4. Save to Firestore
+      const subjects = Array.from(subjectFieldsDiv.querySelectorAll("input")).map(i=>i.value);
+      await db.collection("registrations").add({
+          fullName: document.getElementById("fullName").value,
+          whatsapp: document.getElementById("whatsappNumber").value,
+          exam: document.getElementById("examType").value,
+          department: dept,
+          subjects: subjects,
+          paymentRef: response.reference,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+             secretKey:"FLEXI_SYSTEMS@2026"
+      });
+
+      startConfetti();
+    },
+    onCancel: () => {
+      console.log("User closed the payment modal");
+    }
+  });
+  // handler.openIframe() is DELETED. newTransaction() opens it automatically.
+});
+
+
+// --- 4. BUTTON ACTIVATION LOGIC ---
+function updateDeptButton() {
+  const dept = localStorage.getItem("deptGroup");
+  const links = { 
+      "Science": "Lbt525jrWdq1jupe4kOeKg?mode=gi_t", 
+      "Art": "EG0MrTcXJSd9kTSO53wVpd?mode=gi_t", 
+      "Commercial": "DDsp4gaZGM949EcnMb9Pba?mode=gi_t" 
+  };
+  
+  const deptBtn = document.getElementById("deptGroup");
+  
+  if(dept && links[dept]) {
+      deptBtn.href = "https://chat.whatsapp.com/" + links[dept];
+      deptBtn.style.pointerEvents = "auto";
+      deptBtn.style.opacity = "1";
+      deptBtn.textContent = `Join ${dept} Group`;
+  } else {
+      deptBtn.href = "#";
+      deptBtn.style.pointerEvents = "none";
+      deptBtn.style.opacity = "0.5";
+      deptBtn.textContent = "Join Departmental Group";
+  }
+}
+
+// --- 5. RECEIPT GENERATION ---
+document.getElementById("downloadReceipt").addEventListener("click", async () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const ref = document.getElementById("paymentRef").textContent;
+    const name = document.getElementById("fullName").value.toUpperCase();
+    const whatsapp = document.getElementById("whatsappNumber").value;
+    
+    const logoUrl = "https://i.postimg.cc/rsDz3JWZ/1771700279759-2.jpg"; 
+    const waterUrl = "https://i.postimg.cc/rsDz3JWZ/1771700279759-2.jpg"; 
+    const signUrl = "https://i.postimg.cc/pLbycKTT/Screenshot-20260221-200142-2.jpg";
+
+    const getImage = (url) => new Promise(res => {
+        const img = new Image(); img.crossOrigin = "Anonymous";
+        img.onload = () => {
+            const c = document.createElement("canvas");
+            c.width = img.width; c.height = img.height;
+            c.getContext("2d").drawImage(img,0,0);
+            res({data: c.toDataURL("image/png"), w: img.width, h: img.height});
+        };
+        img.onerror = () => res(null); img.src = url;
+    });
+
+    const qrDiv = document.getElementById("qr-code-temp");
+    qrDiv.innerHTML = "";
+    new QRCode(qrDiv, { text: "https://flexi-systems.github.io/Flexi-Tutors/", width: 128, height: 128 });
+    
+    // Small delay to ensure QR generates
+    setTimeout(async () => {
+        const qrCanvas = qrDiv.querySelector("canvas");
+        const qrData = qrCanvas ? qrCanvas.toDataURL("image/png") : null;
+
+        const [logo, sign, water] = await Promise.all([getImage(logoUrl), getImage(signUrl), getImage(waterUrl)]);
+
+        if(water) { 
+            doc.saveGraphicsState(); 
+            doc.setGState(new doc.GState({opacity:0.12})); 
+            doc.addImage(water.data,'PNG',45,100,120,120); 
+            doc.restoreGraphicsState(); 
+        }
+
+        if(logo) {
+            const ratio = logo.w / logo.h;
+            doc.addImage(logo.data, 'PNG', 20, 15, 25, 25 / ratio);
+        }
+        
+        doc.setFont("helvetica","bold").setFontSize(16).text("FLEXI TUTORS - CBT EXAM PORTAL", 105, 25, { align:"center" });
+        doc.line(65, 28, 145, 28);
+        doc.setFontSize(10).setFont("helvetica","normal").text("OFFICIAL PAYMENT RECEIPT", 105, 36, { align:"center" });
+        
+        doc.text(`WHATSAPP: ${whatsapp}`, 20, 48);
+        doc.text(`NAME: ${name}`, 20, 54);
+        const receiptNo = ref.includes('-') ? ref.split('-')[1] : ref;
+        doc.text(`RECEIPT NO: ${receiptNo}`, 145, 48);
+        doc.text(`EXAM PIN: FT-${Math.random().toString(36).substring(2,8).toUpperCase()}`, 145, 54);
+
+        if(qrData) doc.addImage(qrData, 'PNG', 20, 62, 22, 22);
+        doc.setFont("helvetica","bold").text(`RRR: ${ref.replace('FT-','T')}`, 110, 75);
+        doc.setTextColor(40,167,69).text("PAID", 185, 75);
+        
+        doc.setTextColor(0).setLineWidth(0.5);
+        doc.line(20, 90, 190, 90); doc.line(20, 100, 190, 100); doc.line(20, 135, 190, 135);
+        doc.line(20, 90, 20, 135); doc.line(35, 90, 35, 135); doc.line(145, 90, 145, 135); doc.line(190, 90, 190, 135);
+
+        doc.text("#", 25, 96); doc.text("FEES DESCRIPTION", 40, 96); doc.text("AMOUNT (NGN)", 150, 96);
+        doc.setFont("helvetica","normal");
+        doc.text("1", 25, 108); doc.text("Tutorial Fee", 40, 108); doc.text("500.00", 185, 108, {align:"right"});
+        doc.text("2", 25, 116); doc.text("CBT Mock Fee", 40, 116); doc.text("500.00", 185, 116, {align:"right"});
+        doc.text("3", 25, 124); doc.text("Electronic Charges", 40, 124); doc.text("100.00", 185, 124, {align:"right"});
+        doc.line(20, 128, 190, 128);
+        doc.setFont("helvetica","bold").text("TOTAL PAID", 40, 133); doc.text("1,100.00", 185, 133, {align:"right"});
+
+        if(sign) doc.addImage(sign.data, 'PNG', 20, 145, 40, 15);
+        doc.text("OLUSOLA AINA", 40, 164, { align:"center" });
+        doc.line(20, 167, 75, 167);
+        doc.setFontSize(8).setFont("helvetica","normal").text("CHIEF BURSAR - FLEXI TUTORS", 20, 172);
+        doc.setFontSize(9).setFont("helvetica","italic").text(`Payment Date: ${new Date().toLocaleString()}`, 20, 185);
+        doc.setTextColor(40,167,69).setFont("helvetica","bold").text("powered by FLEXI SYSTEMS", 105, 285, {align:"center"});
+
+        doc.save(`FlexiTutors_Receipt_${ref}.pdf`);
+    }, 500);
+});
+
+document.getElementById("copyRef").addEventListener("click", () => {
+    navigator.clipboard.writeText(document.getElementById("paymentRef").textContent);
+    alert("Reference Copied!");
+});
+
+function startConfetti(){
+  const canvas=document.getElementById('confettiCanvas');
+  const ctx=canvas.getContext('2d'); canvas.width=window.innerWidth; canvas.height=window.innerHeight;
+  let confetti=[]; const colors=["#FFC107","#FF5722","#4CAF50","#2196F3","#E91E63"];
+  for(let i=0;i<150;i++){ confetti.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height- canvas.height,r:Math.random()*6+2,color:colors[Math.floor(Math.random()*colors.length)],tilt:Math.random()*10-10}); }
+  function draw(){ 
+    ctx.clearRect(0,0,canvas.width,canvas.height); 
+    confetti.forEach(c=>{ 
+      ctx.beginPath(); ctx.moveTo(c.x+c.tilt+c.r/2,c.y); ctx.lineTo(c.x+c.tilt,c.y+c.r); ctx.lineTo(c.x+c.tilt-c.r/2,c.y); ctx.fillStyle=c.color; ctx.fill(); 
+      c.y+=2; if(c.y>canvas.height){ c.y=-10; c.x=Math.random()*canvas.width; } 
+    }); 
+    requestAnimationFrame(draw);
+  }
+  draw(); 
+  setTimeout(()=> { confetti = []; ctx.clearRect(0,0,canvas.width,canvas.height); }, 5000);
+}
+
+// RUN ON LOAD
+window.addEventListener("load", () => {
+  updateDeptButton();
+
+  const saved = localStorage.getItem("flexiPayment");
+  if (!saved) return;
+
+  const data = JSON.parse(saved);
+if (!data.paid) return;
+
+// ⏳ EXPIRE AFTER 10 MINUTES
+const expiryMinutes = 10;
+const expiryTime = expiryMinutes * 60 * 1000;
+
+if (Date.now() - data.time > expiryTime) {
+  localStorage.removeItem("flexiPayment");
+  localStorage.removeItem("deptGroup");
+  alert("Session expired. Please contact support if payment was made.");
+  return;
+}
+
+  document.getElementById("page1").style.display = "none";
+  document.getElementById("page2").style.display = "none";
+  document.getElementById("page4").style.display = "block";
+
+  document.getElementById("paymentRef").textContent = data.reference;
+  document.getElementById("fullName").value = data.name;
+  document.getElementById("whatsappNumber").value = data.whatsapp;
+
+  localStorage.setItem("deptGroup", data.department);
+  updateDeptButton();
+});
+</script>
+</body>
+</html>
