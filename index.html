@@ -100,7 +100,7 @@ footer { text-align:center; margin-top:20px; font-size:12px; color:#888; }
   
   <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
   
-  <a id="generalGroup" href="https://chat.whatsapp.com/HoC6C1EUhYO9c45tgBtgOC?mode=gi_t" target="_blank" class="whatsapp-btn general">Join General WhatsApp Group</a>
+  <a id="generalGroup" target="_blank" class="whatsapp-btn general">Join General WhatsApp Group</a>
 <a id="deptGroup" target="_blank" class="whatsapp-btn dept">Join Departmental Group</a>
   
   <canvas id="confettiCanvas"></canvas>
@@ -166,7 +166,7 @@ document.getElementById("payNow").addEventListener("click", () => {
   const paystack = new PaystackPop(); // V2 Initializer
   
   paystack.newTransaction({
-    key: 'pk_live_bb0c7b83bfdbd0c9990e2c7f7fd73a86d4821a00',
+    key: 'pk_test_9408761e58ce1fe7a3a57c0df2422d887c3d4b35',
     email: 'student@flexitutors.com', 
     amount: 110000, 
     currency: "NGN",
@@ -217,26 +217,51 @@ document.getElementById("payNow").addEventListener("click", () => {
 
 
 // --- 4. BUTTON ACTIVATION LOGIC ---
-function updateDeptButton() {
+async function updateDeptButton() {
   const dept = localStorage.getItem("deptGroup");
-  const links = { 
-      "Science": "Lbt525jrWdq1jupe4kOeKg?mode=gi_t", 
-      "Art": "EG0MrTcXJSd9kTSO53wVpd?mode=gi_t", 
-      "Commercial": "DDsp4gaZGM949EcnMb9Pba?mode=gi_t" 
-  };
-  
+  const generalBtn = document.getElementById("generalGroup");
   const deptBtn = document.getElementById("deptGroup");
-  
-  if(dept && links[dept]) {
-      deptBtn.href = "https://chat.whatsapp.com/" + links[dept];
+
+  try {
+    const doc = await db.collection("settings").doc("whatsappLinks").get();
+
+    if(!doc.exists){
+      generalBtn.href = "#";
+      deptBtn.href = "#";
+      return;
+    }
+
+    const links = doc.data();
+
+    // GENERAL GROUP
+    if(links.general){
+      generalBtn.href = links.general;
+    } else {
+      generalBtn.href = "#";
+      generalBtn.style.opacity = "0.5";
+    }
+
+    // DEPARTMENT GROUP
+    let deptLink = null;
+
+    if(dept === "Science") deptLink = links.science;
+    if(dept === "Art") deptLink = links.art;
+    if(dept === "Commercial") deptLink = links.commercial;
+
+    if(deptLink){
+      deptBtn.href = deptLink;
       deptBtn.style.pointerEvents = "auto";
       deptBtn.style.opacity = "1";
       deptBtn.textContent = `Join ${dept} Group`;
-  } else {
+    } else {
       deptBtn.href = "#";
       deptBtn.style.pointerEvents = "none";
       deptBtn.style.opacity = "0.5";
       deptBtn.textContent = "Join Departmental Group";
+    }
+
+  } catch(error){
+    console.error("Failed to load WhatsApp links:", error);
   }
 }
 
@@ -379,4 +404,4 @@ if (Date.now() - data.time > expiryTime) {
 });
 </script>
 </body>
-</html>
+  </html>
